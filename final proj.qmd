@@ -19,5 +19,5 @@ new_income_data <- income_data %>% select(zipcode, agi_stub, A00100, A04800, A85
 ```
 
 ```{r}
-new_medi_data <- Medicare_data %>% select(Rndrng_Prvdr_Zip5, )
+new_medi_data <- Medicare_data %>% select(Rndrng_Prvdr_Zip5, Tot_Srvcs, Tot_Bene_Day_Srvcs, Avg_Mdcr_Pymt_Amt, Rndrng_Prvdr_Type, HCPCS_Desc)%>%filter(Rndrng_Prvdr_Type=="Anesthesiology")
 ```
