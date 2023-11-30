@@ -15,9 +15,103 @@ Medicare_data <- read_csv("~/Desktop/Medicare_Physician_Other_Practitioners_by_P
 ```
 
 ```{r}
-new_income_data <- income_data %>% select(zipcode, agi_stub, A00100, A04800, A85530)
+new_income_data <- income_data %>% select(zipcode, agi_stub, A02650, A04800, A85530)%>%rename(income_level=agi_stub, tt_income=A02650, taxable_income=A04800, additional_medi_tax=A85530)
+
+new_medi_data <- Medicare_data %>% select(Rndrng_Prvdr_Zip5, Tot_Srvcs, Avg_Mdcr_Pymt_Amt, Rndrng_Prvdr_Type, HCPCS_Desc, Rndrng_Prvdr_RUCA)%>%rename(zipcode=Rndrng_Prvdr_Zip5,num_service=Tot_Srvcs, avg_medi_pay=Avg_Mdcr_Pymt_Amt, provider_type=Rndrng_Prvdr_Type, rural_urban=Rndrng_Prvdr_RUCA )%>%filter(provider_type=="Anesthesiology")
 ```
 
 ```{r}
-new_medi_data <- Medicare_data %>% select(Rndrng_Prvdr_Zip5, Tot_Srvcs, Tot_Bene_Day_Srvcs, Avg_Mdcr_Pymt_Amt, Rndrng_Prvdr_Type, HCPCS_Desc)%>%filter(Rndrng_Prvdr_Type=="Anesthesiology")
+merged_data <- inner_join(new_medi_data, new_income_data, by = "zipcode")
+```
+
+```{r}
+derived_data <- merged_data %>%
+  group_by(zipcode, income_level, HCPCS_Desc, rural_urban ) %>%
+  summarise(
+    mean_medi_pay=mean(avg_medi_pay),
+    Median_Household_Income = median(tt_income),
+    median_num_service = median(num_service),
+    median_tax_income = median(taxable_income)
+  ) %>% ungroup()
+```
+
+```{r}
+unique(derived_data$rural_urban)
+rm(filtered_data,testdat, subset_derived_data1)
+```
+
+```{r}
+RUCA_categories <- cut(derived_data$rural_urban, 
+                      breaks = c(0, 3, 6, 9, Inf), 
+                      labels = c("Metropoli area", "Micropoli area", "Small town", "Rural area"),
+                      include.lowest = TRUE)
+
+# Add the new categorical variable to your data
+derived_data$RUCA_Category <- RUCA_categories
+```
+
+```{r}
+RUCA_categories <- cut(merged_data$rural_urban, 
+                      breaks = c(0, 3, 6, 9, Inf), 
+                      labels = c("Metropoli area", "Micropoli area", "Small town", "Rural area"),
+                      include.lowest = TRUE)
+
+merged_data$RUCA<-RUCA_categories
+
+merged_data%>%
+  group_by(RUCA) %>%
+  summarise(
+    total_reimb=sum(avg_medi_pay),
+    mean_reim=mean(avg_medi_pay),
+    Median_house_income = median(tt_income),
+        median_num_service = median(num_service)
+  ) 
+```
+
+```{r}
+merged_data%>%
+  group_by(income_level) %>%
+  summarise(
+    mean_reimbursent=mean(avg_medi_pay),
+    Median_Personal_Income = median(tt_income),
+    median_num_service = median(num_service)
+  ) 
+```
+
+```{r}
+mod<-lm(mean_medi_pay~Median_Personal_Income+median_num_service+as.factor(RUCA_Category)+income_level, derived_data)
+
+summary(mod)
+```
+
+```{r}
+hist_data <- split(derived_data$median_num_service, derived_data$RUCA_Category)
+
+# Plotting the histogram
+par(mfrow = c(2, 2))  # Adjust the layout if needed
+for (i in 1:length(hist_data)) {
+  hist(hist_data[[i]], main = paste("RUCA Category:", levels(derived_data$RUCA_Category)[i]), xlab = "Median Personal Income")
+}
+```
+
+```{r}
+derived_data%>%group_by(RUCA_Category)%>%select(Median_Personal_Income, mean_medi_pay, median_num_service)%>%summarise(tt_pers_income=sum(Median_Personal_Income), tt_medi_pay=sum(mean_medi_pay), tt_num_serv=sum(median_num_service))
+```
+
+```{r}
+anova_result1 <- aov(Median_Personal_Income ~ RUCA_Category, data = derived_data)
+summary(anova_result1)
+TukeyHSD(anova_result1)
+```
+
+```{r}
+anova_result2 <- aov(mean_medi_pay ~ RUCA_Category, data = derived_data)
+summary(anova_result2)
+TukeyHSD(anova_result2)
+```
+
+```{r}
+anova_result3 <- aov(median_num_service ~ RUCA_Category, data = derived_data)
+summary(anova_result3)
+TukeyHSD(anova_result3)
 ```
